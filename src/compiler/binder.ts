@@ -2299,34 +2299,16 @@ namespace ts {
             }
         }
 
-        /**
-         * Given the symbol of a declaration, find the symbol of its Javascript container-like initializer,
-         * if it has one. Otherwise just return the original symbol.
-         *
-         * Container-like initializer behave like namespaces, so the binder needs to add contained symbols
-         * to their exports. An example is a function with assignments to `this` inside.
-         */
-        function getJSInitializerSymbol(symbol: Symbol) {
-            if (!symbol || !symbol.valueDeclaration) {
-                return symbol;
-            }
-            const declaration = symbol.valueDeclaration;
-            const e = getDeclaredJavascriptInitializer(declaration) || getAssignedJavascriptInitializer(declaration);
-            return e && e.symbol ? e.symbol : symbol;
-        }
-
         function bindExportsPropertyAssignment(node: BinaryExpression) {
             // When we create a property via 'exports.foo = bar', the 'exports.foo' property access
             // expression is the declaration
             setCommonJsModuleIndicator(node);
             const lhs = node.left as PropertyAccessEntityNameExpression;
             const symbol = forEachIdentifierInEntityName(lhs.expression, (id, original) => {
-                if (!original) {
-                    return undefined;
+                if (original) {
+                    addDeclarationToSymbol(original, id, SymbolFlags.Module | SymbolFlags.JSContainer);
                 }
-                const s = getJSInitializerSymbol(original);
-                addDeclarationToSymbol(s, id, SymbolFlags.Module | SymbolFlags.JSContainer);
-                return s;
+                return original;
             });
             if (symbol) {
                 const flags = isClassExpression(node.right) ?
@@ -2367,7 +2349,7 @@ namespace ts {
                     if (isBinaryExpression(thisContainer.parent) && thisContainer.parent.operatorToken.kind === SyntaxKind.EqualsToken) {
                         const l = thisContainer.parent.left;
                         if (isPropertyAccessEntityNameExpression(l) && isPrototypeAccess(l.expression)) {
-                            constructorSymbol = getJSInitializerSymbolFromName(l.expression.expression, thisParentContainer);
+                            constructorSymbol = lookupSymbolForPropertyAccess(l.expression.expression, thisParentContainer);
                         }
                     }
 
@@ -2466,12 +2448,8 @@ namespace ts {
             bindPropertyAssignment(node.expression, node, /*isPrototypeProperty*/ false);
         }
 
-        function getJSInitializerSymbolFromName(name: EntityNameExpression, lookupContainer?: Node): Symbol {
-            return getJSInitializerSymbol(lookupSymbolForPropertyAccess(name, lookupContainer));
-        }
-
         function bindPropertyAssignment(name: EntityNameExpression, propertyAccess: PropertyAccessEntityNameExpression, isPrototypeProperty: boolean) {
-            let symbol = getJSInitializerSymbolFromName(name);
+            let symbol = lookupSymbolForPropertyAccess(name);
             const isToplevelNamespaceableInitializer = isBinaryExpression(propertyAccess.parent)
                 ? getParentOfBinaryExpression(propertyAccess.parent).parent.kind === SyntaxKind.SourceFile &&
                     !!getJavascriptInitializer(getInitializerOfBinaryExpression(propertyAccess.parent), isPrototypeAccess(propertyAccess.parent.left))
@@ -2480,14 +2458,14 @@ namespace ts {
                 // make symbols or add declarations for intermediate containers
                 const flags = SymbolFlags.Module | SymbolFlags.JSContainer;
                 const excludeFlags = SymbolFlags.ValueModuleExcludes & ~SymbolFlags.JSContainer;
-                forEachIdentifierInEntityName(propertyAccess.expression, (id, original) => {
+                symbol = forEachIdentifierInEntityName(propertyAccess.expression, (id, original) => {
                     if (original) {
                         // Note: add declaration to original symbol, not the special-syntax's symbol, so that namespaces work for type lookup
                         addDeclarationToSymbol(original, id, flags);
                         return original;
                     }
                     else {
-                        return symbol = declareSymbol(symbol ? symbol.exports : container.locals, symbol, id, flags, excludeFlags);
+                        return declareSymbol(symbol ? symbol.exports : container.locals, symbol, id, flags, excludeFlags);
                     }
                 });
             }
@@ -2520,7 +2498,7 @@ namespace ts {
                 return lookupSymbolForNameWorker(lookupContainer, node.escapedText);
             }
             else {
-                const symbol = getJSInitializerSymbol(lookupSymbolForPropertyAccess(node.expression));
+                const symbol = lookupSymbolForPropertyAccess(node.expression);
                 return symbol && symbol.exports && symbol.exports.get(node.name.escapedText);
             }
         }
@@ -2533,7 +2511,7 @@ namespace ts {
                 return action(e, lookupSymbolForPropertyAccess(e));
             }
             else {
-                const s = getJSInitializerSymbol(forEachIdentifierInEntityName(e.expression, action));
+                const s = forEachIdentifierInEntityName(e.expression, action);
                 Debug.assert(!!s && !!s.exports);
                 return action(e.name, s.exports.get(e.name.escapedText));
             }
