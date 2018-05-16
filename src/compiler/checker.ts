@@ -890,6 +890,9 @@ namespace ts {
         }
 
         function mergeSymbol(target: Symbol, source: Symbol) {
+            if (!(target.flags & SymbolFlags.Transient)) {
+                target = cloneSymbol(target);
+            }
             if (!(target.flags & getExcludedSymbolFlags(source.flags)) ||
                 (source.flags | target.flags) & SymbolFlags.JSContainer) {
                 const targetValueDeclaration = target.valueDeclaration;
@@ -947,6 +950,7 @@ namespace ts {
                     error(errorNode, message, symbolToString(source));
                 });
             }
+            return target;
         }
 
         function combineSymbolTables(first: SymbolTable | undefined, second: SymbolTable | undefined): SymbolTable | undefined {
@@ -961,16 +965,7 @@ namespace ts {
         function mergeSymbolTable(target: SymbolTable, source: SymbolTable) {
             source.forEach((sourceSymbol, id) => {
                 let targetSymbol = target.get(id);
-                if (!targetSymbol) {
-                    target.set(id, sourceSymbol);
-                }
-                else {
-                    if (!(targetSymbol.flags & SymbolFlags.Transient)) {
-                        targetSymbol = cloneSymbol(targetSymbol);
-                        target.set(id, targetSymbol);
-                    }
-                    mergeSymbol(targetSymbol, sourceSymbol);
-                }
+                target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol) : sourceSymbol);
             });
         }
 
@@ -1000,10 +995,7 @@ namespace ts {
                 // obtain item referenced by 'export='
                 mainModule = resolveExternalModuleSymbol(mainModule);
                 if (mainModule.flags & SymbolFlags.Namespace) {
-                    // if module symbol has already been merged - it is safe to use it.
-                    // otherwise clone it
-                    mainModule = mainModule.flags & SymbolFlags.Transient ? mainModule : cloneSymbol(mainModule);
-                    mergeSymbol(mainModule, moduleAugmentation.symbol);
+                    mainModule = mergeSymbol(mainModule, moduleAugmentation.symbol);
                 }
                 else {
                     // moduleName will be a StringLiteral since this is not `declare global`.
@@ -2300,14 +2292,7 @@ namespace ts {
             }
             moduleSymbol.exports.forEach((s, name) => {
                 if (name === InternalSymbolName.ExportEquals) return;
-                if (!merged.exports.has(name)) {
-                    merged.exports.set(name, s);
-                }
-                else {
-                    const ms = cloneSymbol(merged.exports.get(name));
-                    mergeSymbol(ms, s);
-                    merged.exports.set(name, ms);
-                }
+                merged.exports.set(name, merged.exports.has(name) ? mergeSymbol(merged.exports.get(name), s) : s);
             });
             return merged;
         }
