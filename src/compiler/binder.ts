@@ -2299,6 +2299,22 @@ namespace ts {
             }
         }
 
+        /**
+         * Given the symbol of a declaration, find the symbol of its Javascript container-like initializer,
+         * if it has one. Otherwise just return the original symbol.
+         *
+         * Container-like initializer behave like namespaces, so the binder needs to add contained symbols
+         * to their exports. An example is a function with assignments to `this` inside.
+         */
+        function getJSInitializerSymbol(symbol: Symbol) {
+            if (!symbol || !symbol.valueDeclaration) {
+                return symbol;
+            }
+            const declaration = symbol.valueDeclaration;
+            const e = getDeclaredJavascriptInitializer(declaration) || getAssignedJavascriptInitializer(declaration);
+            return e && e.symbol ? e.symbol : symbol;
+        }
+
         function bindExportsPropertyAssignment(node: BinaryExpression) {
             // When we create a property via 'exports.foo = bar', the 'exports.foo' property access
             // expression is the declaration

@@ -893,9 +893,7 @@ namespace ts {
             if (!(target.flags & SymbolFlags.Transient)) {
                 target = cloneSymbol(target);
             }
-            if (!(target.flags & getExcludedSymbolFlags(source.flags)) ||
-                (source.flags | target.flags) & SymbolFlags.JSContainer) {
-                const targetValueDeclaration = target.valueDeclaration;
+            if (!(target.flags & getExcludedSymbolFlags(source.flags))) {
                 Debug.assert(!!(target.flags & SymbolFlags.Transient));
                 // Javascript static-property-assignment declarations always merge, even though they are also values
                 if (source.flags & SymbolFlags.ValueModule && target.flags & SymbolFlags.ValueModule && target.constEnumOnlyModule && !source.constEnumOnlyModule) {
@@ -917,18 +915,6 @@ namespace ts {
                 if (source.exports) {
                     if (!target.exports) target.exports = createSymbolTable();
                     mergeSymbolTable(target.exports, source.exports);
-                }
-                if ((source.flags | target.flags) & SymbolFlags.JSContainer) {
-                    const sourceInitializer = getJSInitializerSymbol(source);
-                    const init = getDeclaredJavascriptInitializer(targetValueDeclaration) || getAssignedJavascriptInitializer(targetValueDeclaration);
-                    let targetInitializer = init && init.symbol ? init.symbol : target;
-                    if (!(targetInitializer.flags & SymbolFlags.Transient)) {
-                        const mergedInitializer = getMergedSymbol(targetInitializer);
-                        targetInitializer = mergedInitializer === targetInitializer ? cloneSymbol(targetInitializer) : mergedInitializer;
-                    }
-                    if (sourceInitializer !== source || targetInitializer !== target) {
-                        mergeSymbol(targetInitializer, sourceInitializer);
-                    }
                 }
                 recordMergedSymbol(target, source);
             }
@@ -964,8 +950,7 @@ namespace ts {
 
         function mergeSymbolTable(target: SymbolTable, source: SymbolTable) {
             source.forEach((sourceSymbol, id) => {
-                let targetSymbol = target.get(id);
-                target.set(id, targetSymbol ? mergeSymbol(targetSymbol, sourceSymbol) : sourceSymbol);
+                target.set(id, target.has(id) ? mergeSymbol(target.get(id), sourceSymbol) : sourceSymbol);
             });
         }
 
