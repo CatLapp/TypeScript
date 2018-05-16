@@ -4949,6 +4949,14 @@ namespace ts {
         function getTypeOfFuncClassEnumModule(symbol: Symbol): Type {
             const links = getSymbolLinks(symbol);
             if (!links.type) {
+                if (symbol.flags & SymbolFlags.JSAlias) {
+                    // TODO: eventually just call resolveAlias
+                    const aliasDeclaration = symbol.valueDeclaration; // TODO: For testing purposes only, should be getDeclarationOfAliasSymbol
+                    // Debug.assert(isBinaryExpression(aliasDeclaration.parent) && isExpressionStatement(aliasDeclaration.parent.parent),  Debug.showSyntaxKind(aliasDeclaration) + Debug.showSyntaxKind(aliasDeclaration.parent) + Debug.showSyntaxKind(aliasDeclaration.parent.parent));
+                    const aliasSymbol = aliasDeclaration.parent.symbol;
+                    // this is probably super wrong
+                    symbol = mergeSymbol(symbol, aliasSymbol);
+                }
                 if (symbol.flags & SymbolFlags.Module && isShorthandAmbientModuleSymbol(symbol)) {
                     links.type = anyType;
                 }

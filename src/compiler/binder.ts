@@ -1696,6 +1696,7 @@ namespace ts {
                 symbol.parent = container.symbol;
             }
             addDeclarationToSymbol(symbol, node, symbolFlags);
+            return symbol;
         }
 
         function bindBlockScopedDeclaration(node: Declaration, symbolFlags: SymbolFlags, symbolExcludes: SymbolFlags) {
@@ -2531,7 +2532,11 @@ namespace ts {
             }
             else {
                 const bindingName = node.name ? node.name.escapedText : InternalSymbolName.Class;
-                bindAnonymousDeclaration(node, SymbolFlags.Class, bindingName);
+                const symbol = bindAnonymousDeclaration(node, SymbolFlags.Class, bindingName);
+                if (getAssignedJavascriptInitializer(node) || node.parent && getDeclaredJavascriptInitializer(node.parent)) {
+                    // Will be looked up later (probably) (who knows)
+                    symbol.flags |= SymbolFlags.JSAlias;
+                }
                 // Add name of class expression into the map for semantic classifier
                 if (node.name) {
                     classifiableNames.set(node.name.escapedText, true);
@@ -2577,7 +2582,7 @@ namespace ts {
                     bindBlockScopedVariableDeclaration(node);
                 }
                 else if (isParameterDeclaration(node)) {
-                    // It is safe to walk up parent chain to find whether the node is a destructing parameter declaration
+                    // It is safe to walk up parent chain to find whether the node is a destructuring parameter declaration
                     // because its parent chain has already been set up, since parents are set before descending into children.
                     //
                     // If node is a binding element in parameter declaration, we need to use ParameterExcludes.
