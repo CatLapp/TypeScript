@@ -17,4 +17,4 @@ hooks.forEach(function (hook) {
 
         fs.linkSync(hookInSourceControl, hookInHiddenDirectory);
     }
-});
+}); adding another line of text
